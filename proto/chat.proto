@@ -1,0 +1,275 @@
+syntax = "proto3";
+
+// Wire protocol for the native WebSocket connection between the browser and
+// the Elixir gateway. Every frame is a length-delimited protobuf payload sent
+// as a binary WebSocket message. JSON is never used on this connection.
+package chat.v1;
+
+option go_package = "github.com/example/rustle/gen/chat/v1;chatv1";
+
+enum PresenceStatus {
+  PRESENCE_STATUS_UNSPECIFIED = 0;
+  PRESENCE_STATUS_ONLINE = 1;
+  PRESENCE_STATUS_IDLE = 2;
+  PRESENCE_STATUS_DO_NOT_DISTURB = 3;
+  PRESENCE_STATUS_OFFLINE = 4;
+}
+
+enum ChannelKind {
+  CHANNEL_KIND_UNSPECIFIED = 0;
+  CHANNEL_KIND_TEXT = 1;
+  CHANNEL_KIND_VOICE = 2;
+}
+
+enum AckStatus {
+  ACK_STATUS_UNSPECIFIED = 0;
+  ACK_STATUS_COMMITTED = 1;
+  ACK_STATUS_FAILED = 2;
+}
+
+enum CallEventType {
+  CALL_EVENT_TYPE_UNSPECIFIED = 0;
+  CALL_EVENT_TYPE_JOIN = 1;
+  CALL_EVENT_TYPE_LEAVE = 2;
+  CALL_EVENT_TYPE_OFFER = 3;
+  CALL_EVENT_TYPE_ANSWER = 4;
+  CALL_EVENT_TYPE_ICE = 5;
+  CALL_EVENT_TYPE_MEDIA = 6;
+}
+
+message User {
+  string id = 1;
+  string display_name = 2;
+  string avatar_color = 3;
+  string locale = 4;
+  PresenceStatus presence = 5;
+  string avatar_url = 6;
+  string bio = 7;
+  string pronouns = 8;
+  string banner_url = 9;
+  string banner_color = 10;
+  string created_at = 11;
+}
+
+message GuildMember {
+  string user_id = 1;
+  string display_name = 2;
+  string avatar_color = 3;
+  PresenceStatus presence = 4;
+  string role = 5;
+  string avatar_url = 6;
+  string bio = 7;
+  string pronouns = 8;
+  string banner_url = 9;
+  string banner_color = 10;
+  string created_at = 11;
+}
+
+message Channel {
+  string id = 1;
+  string guild_id = 2;
+  string name = 3;
+  string topic = 4;
+  ChannelKind kind = 5;
+  int32 position = 6;
+}
+
+message Guild {
+  string id = 1;
+  string name = 2;
+  string icon_color = 3;
+  repeated Channel channels = 4;
+  repeated GuildMember members = 5;
+  string current_user_role = 6;
+}
+
+message Authenticate {
+  string token = 1;
+  string client_version = 2;
+}
+
+message Authenticated {
+  User user = 1;
+  repeated Guild guilds = 2;
+  string session_id = 3;
+}
+
+message Subscribe {
+  repeated string channel_ids = 1;
+}
+
+message Unsubscribe {
+  repeated string channel_ids = 1;
+}
+
+message SendMessage {
+  string channel_id = 1;
+  string content = 2;
+  repeated string attachments = 3;
+  // Client-generated idempotency key. Reusing it on retry is supported.
+  string client_id = 4;
+}
+
+message Heartbeat {
+  PresenceStatus status = 1;
+}
+
+message SetPresence {
+  PresenceStatus status = 1;
+}
+
+message Typing {
+  string channel_id = 1;
+  bool active = 2;
+}
+
+message ChatMessage {
+  // 64-bit Snowflake, serialized on the wire as int64. Browser code must use
+  // protobufjs + long; never coerce this to a JS Number.
+  int64 id = 1;
+  string channel_id = 2;
+  string guild_id = 3;
+  string author_id = 4;
+  string author_name = 5;
+  string author_color = 6;
+  string content = 7;
+  repeated string attachments = 8;
+  int64 timestamp_ms = 9;
+  // Echoes SendMessage.client_id so a sender can reconcile its optimistic row.
+  string client_id = 10;
+  string author_avatar_url = 11;
+}
+
+message CallParticipant {
+  string session_id = 1;
+  string user_id = 2;
+  string display_name = 3;
+  string avatar_url = 4;
+  string avatar_color = 5;
+  bool video = 6;
+  bool muted = 7;
+  bool deafened = 8;
+  bool screen_sharing = 9;
+}
+
+message CallSnapshot {
+  string channel_id = 1;
+  string self_session_id = 2;
+  repeated CallParticipant participants = 3;
+}
+
+message CallEvent {
+  string channel_id = 1;
+  string from_session_id = 2;
+  string from_user_id = 3;
+  string from_display_name = 4;
+  string from_avatar_url = 5;
+  string from_avatar_color = 6;
+  string target_session_id = 7;
+  CallEventType type = 8;
+  string sdp = 9;
+  string candidate = 10;
+  bool video = 11;
+  bool muted = 12;
+  bool deafened = 13;
+  bool screen_sharing = 14;
+}
+
+message JoinCall {
+  string channel_id = 1;
+  bool video = 2;
+  bool muted = 3;
+  bool deafened = 4;
+}
+
+message LeaveCall {
+  string channel_id = 1;
+}
+
+message CallSignal {
+  string channel_id = 1;
+  string target_session_id = 2;
+  CallEventType type = 3;
+  string sdp = 4;
+  string candidate = 5;
+}
+
+message CallMedia {
+  string channel_id = 1;
+  bool video = 2;
+  bool muted = 3;
+  bool deafened = 4;
+  bool screen_sharing = 5;
+}
+
+message MessageAck {
+  string channel_id = 1;
+  string client_id = 2;
+  int64 message_id = 3;
+  AckStatus status = 4;
+  int64 timestamp_ms = 5;
+  string error = 6;
+  bool retryable = 7;
+}
+
+message PresenceEvent {
+  string guild_id = 1;
+  string user_id = 2;
+  PresenceStatus status = 3;
+  int64 updated_at_ms = 4;
+}
+
+message PresenceSnapshot {
+  repeated PresenceEvent statuses = 1;
+}
+
+message TypingEvent {
+  string channel_id = 1;
+  string user_id = 2;
+  string display_name = 3;
+  bool active = 4;
+}
+
+message ServerError {
+  string code = 1;
+  string message = 2;
+  bool retryable = 3;
+}
+
+message Pong {
+  int64 server_time_ms = 1;
+  PresenceStatus status = 2;
+}
+
+message ClientFrame {
+  string request_id = 1;
+  oneof payload {
+    Authenticate authenticate = 2;
+    Subscribe subscribe = 3;
+    Unsubscribe unsubscribe = 4;
+    SendMessage send_message = 5;
+    Heartbeat heartbeat = 6;
+    SetPresence set_presence = 7;
+    Typing typing = 8;
+    JoinCall join_call = 9;
+    LeaveCall leave_call = 10;
+    CallSignal call_signal = 11;
+    CallMedia call_media = 12;
+  }
+}
+
+message ServerFrame {
+  string request_id = 1;
+  oneof payload {
+    Authenticated authenticated = 2;
+    ChatMessage message = 3;
+    MessageAck ack = 4;
+    PresenceEvent presence = 5;
+    PresenceSnapshot presence_snapshot = 6;
+    ServerError error = 7;
+    Pong pong = 8;
+    TypingEvent typing = 9;
+    CallSnapshot call_snapshot = 10;
+    CallEvent call_event = 11;
+  }
+}

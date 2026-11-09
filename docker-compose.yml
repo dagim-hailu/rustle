@@ -1,0 +1,348 @@
+name: rustle
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-scylla-common: &scylla-common
+  image: scylladb/scylla:2026.3.4
+  restart: unless-stopped
+  logging: *default-logging
+  networks:
+    - rustle
+  ulimits:
+    nofile:
+      soft: 65535
+      hard: 65535
+  healthcheck:
+    test: ["CMD-SHELL", "nodetool status 2>/dev/null | grep -q '^UN'"]
+    interval: 15s
+    timeout: 10s
+    retries: 30
+    start_period: 150s
+  stop_grace_period: 60s
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-rustle}
+      POSTGRES_USER: ${POSTGRES_USER:-rustle}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rustle_dev_password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - rustle
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  keydb:
+    image: eqalpha/keydb:alpine
+    restart: unless-stopped
+    logging: *default-logging
+    entrypoint: ["keydb-server"]
+    command:
+      - "/etc/keydb/keydb.conf"
+      - "--requirepass"
+      - "${KEYDB_PASSWORD:-devkeydb}"
+      - "--appendonly"
+      - "yes"
+      - "--notify-keyspace-events"
+      - "KEx"
+      - "--maxmemory-policy"
+      - "noeviction"
+      - "--save"
+      - "60"
+      - "1"
+    volumes:
+      - keydb-data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - rustle
+    environment:
+      KEYDB_PASSWORD: ${KEYDB_PASSWORD:-devkeydb}
+    healthcheck:
+      test: ["CMD-SHELL", "keydb-cli -a \"$${KEYDB_PASSWORD}\" ping 2>/dev/null | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  nats:
+    image: nats:2.12-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    command:
+      - "-js"
+      - "-sd"
+      - "/data"
+      - "-m"
+      - "8222"
+    volumes:
+      - nats-data:/data
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    networks:
+      - rustle
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8222/healthz 2>/dev/null | grep -q ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  scylla-1:
+    <<: *scylla-common
+    command:
+      - "--seeds=scylla-1"
+      - "--cluster-name=rustle"
+      - "--listen-address=0.0.0.0"
+      - "--rpc-address=0.0.0.0"
+      - "--broadcast-address=scylla-1"
+      - "--broadcast-rpc-address=scylla-1"
+      - "--endpoint-snitch=GossipingPropertyFileSnitch"
+      - "--dc=us-east"
+      - "--rack=rack1"
+      - "--smp=1"
+      - "--memory=1G"
+      - "--overprovisioned=1"
+      - "--developer-mode=1"
+      - "--io-setup=0"
+      - "--reactor-backend=epoll"
+    volumes:
+      - scylla-1-data:/var/lib/scylla
+    ports:
+      - "9042:9042"
+
+  scylla-2:
+    <<: *scylla-common
+    depends_on:
+      scylla-1:
+        condition: service_healthy
+    command:
+      - "--seeds=scylla-1"
+      - "--cluster-name=rustle"
+      - "--listen-address=0.0.0.0"
+      - "--rpc-address=0.0.0.0"
+      - "--broadcast-address=scylla-2"
+      - "--broadcast-rpc-address=scylla-2"
+      - "--endpoint-snitch=GossipingPropertyFileSnitch"
+      - "--dc=us-east"
+      - "--rack=rack1"
+      - "--smp=1"
+      - "--memory=1G"
+      - "--overprovisioned=1"
+      - "--developer-mode=1"
+      - "--io-setup=0"
+      - "--reactor-backend=epoll"
+    volumes:
+      - scylla-2-data:/var/lib/scylla
+
+  scylla-3:
+    <<: *scylla-common
+    depends_on:
+      scylla-1:
+        condition: service_healthy
+    command:
+      - "--seeds=scylla-1"
+      - "--cluster-name=rustle"
+      - "--listen-address=0.0.0.0"
+      - "--rpc-address=0.0.0.0"
+      - "--broadcast-address=scylla-3"
+      - "--broadcast-rpc-address=scylla-3"
+      - "--endpoint-snitch=GossipingPropertyFileSnitch"
+      - "--dc=us-east"
+      - "--rack=rack1"
+      - "--smp=1"
+      - "--memory=1G"
+      - "--overprovisioned=1"
+      - "--developer-mode=1"
+      - "--io-setup=0"
+      - "--reactor-backend=epoll"
+    volumes:
+      - scylla-3-data:/var/lib/scylla
+
+  scylla-init:
+    image: scylladb/scylla:2026.3.4
+    logging: *default-logging
+    entrypoint: ["/bin/sh", "/scripts/init-scylla.sh"]
+    volumes:
+      - ./db/scylla:/scripts:ro
+      - ./db/scylla:/schema:ro
+    depends_on:
+      scylla-1:
+        condition: service_healthy
+      scylla-2:
+        condition: service_healthy
+      scylla-3:
+        condition: service_healthy
+    networks:
+      - rustle
+    restart: "no"
+
+  shield:
+    build:
+      context: .
+      dockerfile: shield/Dockerfile
+    image: rustle-shield:local
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      SHIELD_ADDR: 0.0.0.0:50051
+      SCYLLA_NODES: scylla-1:9042,scylla-2:9042,scylla-3:9042
+      MAX_BUCKET_LOOKBACK: "1000"
+      QUERY_TIMEOUT_MS: "7000"
+      RUST_LOG: info
+    depends_on:
+      scylla-init:
+        condition: service_completed_successfully
+    ports:
+      - "50051:50051"
+    networks:
+      - rustle
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    image: rustle-api:local
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      API_HOST: 0.0.0.0
+      API_PORT: "8080"
+      DATABASE_URL: postgres://${POSTGRES_USER:-rustle}:${POSTGRES_PASSWORD:-rustle_dev_password}@postgres:5432/${POSTGRES_DB:-rustle}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-rustle-jwt-secret-change-me-0123456789abcdef}
+      JWT_TTL_SECONDS: "86400"
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-dev-only-internal-token-change-me}
+      SHIELD_ADDRESS: shield:50051
+      SHIELD_PROTO_PATH: /app/proto/shield.proto
+      MIGRATIONS_DIR: /app/db/postgres/migrations
+      UPLOAD_DIR: /app/uploads
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-26214400}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      SEED_DEMO: ${SEED_DEMO:-true}
+      DEMO_EMAIL: ${DEMO_EMAIL:-demo@rustle.local}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-DemoPassw0rd!}
+      LOG_LEVEL: info
+    volumes:
+      - uploads-data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      shield:
+        condition: service_healthy
+      scylla-init:
+        condition: service_completed_successfully
+    ports:
+      - "8080:8080"
+    networks:
+      - rustle
+
+  gateway-1:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    image: rustle-gateway:local
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      GATEWAY_PORT: "4000"
+      GATEWAY_NODE_ID: "1"
+      JWT_SECRET: ${JWT_SECRET:-dev-only-rustle-jwt-secret-change-me-0123456789abcdef}
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-dev-only-internal-token-change-me}
+      INTERNAL_API_URL: http://api:8080
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      SCYLLA_NODES: scylla-1:9042,scylla-2:9042,scylla-3:9042
+      KEYDB_URL: redis://:${KEYDB_PASSWORD:-devkeydb}@keydb:6379/0
+      NATS_HOST: nats
+      NATS_PORT: "4222"
+    depends_on:
+      api:
+        condition: service_healthy
+      keydb:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      scylla-init:
+        condition: service_completed_successfully
+    ports:
+      - "4000:4000"
+    networks:
+      - rustle
+
+  gateway-2:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    image: rustle-gateway:local
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      GATEWAY_PORT: "4000"
+      GATEWAY_NODE_ID: "2"
+      JWT_SECRET: ${JWT_SECRET:-dev-only-rustle-jwt-secret-change-me-0123456789abcdef}
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-dev-only-internal-token-change-me}
+      INTERNAL_API_URL: http://api:8080
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      SCYLLA_NODES: scylla-1:9042,scylla-2:9042,scylla-3:9042
+      KEYDB_URL: redis://:${KEYDB_PASSWORD:-devkeydb}@keydb:6379/0
+      NATS_HOST: nats
+      NATS_PORT: "4222"
+    depends_on:
+      api:
+        condition: service_healthy
+      keydb:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      scylla-init:
+        condition: service_completed_successfully
+    ports:
+      - "4001:4000"
+    networks:
+      - rustle
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+      args:
+        VITE_GATEWAY_URL: ${VITE_GATEWAY_URL:-}
+        VITE_API_URL: ${VITE_API_URL:-}
+        VITE_STUN_URLS: ${VITE_STUN_URLS:-stun:stun.l.google.com:19302}
+        VITE_TURN_URL: ${VITE_TURN_URL:-}
+        VITE_TURN_USERNAME: ${VITE_TURN_USERNAME:-}
+        VITE_TURN_CREDENTIAL: ${VITE_TURN_CREDENTIAL:-}
+    image: rustle-web:local
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "3000:80"
+    networks:
+      - rustle
+
+volumes:
+  postgres-data:
+  keydb-data:
+  nats-data:
+  scylla-1-data:
+  scylla-2-data:
+  scylla-3-data:
+  uploads-data:
+
+networks:
+  rustle:
+    driver: bridge

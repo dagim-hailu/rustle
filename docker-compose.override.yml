@@ -1,0 +1,11 @@
+# Local-only overrides. Host ports 3000 (web) and 4000 (gateway-1) are already
+# occupied by other projects on this machine, so the browser-facing web port is
+# moved to 3002 and gateway-1 publishes no host port (it still runs and takes part
+# in fan-out internally). The browser connects to gateway-2 on 4001 via the
+# VITE_GATEWAY_URL build arg set in .env. Do not use this file in production.
+services:
+  web:
+    ports: !override
+      - "3002:80"
+  gateway-1:
+    ports: !override []

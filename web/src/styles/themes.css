@@ -1,0 +1,110 @@
+/*
+ * Rustle semantic palette.
+ * Base brand: rust #B7410E. Light uses the brand as a fill and accessible ink;
+ * dark uses a lighter rust tint for text/controls so contrast survives on dark
+ * surfaces. The teal accent is the complementary hue family to rust.
+ */
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #faf7f2;
+  --surface: #ffffff;
+  --surface-2: #f2ece4;
+  --surface-3: #e9e0d5;
+  --border: #d8ccbd;
+  --border-strong: #b9a996;
+
+  --text: #211a15;
+  --text-muted: #65594f;
+  --text-faint: #807267;
+
+  --primary: #b7410e;
+  --primary-hover: #9c360b;
+  --on-primary: #ffffff;
+  --primary-soft: #f7e2d6;
+
+  --accent: #0f6b6b;
+  --accent-strong: #0a5555;
+  --accent-soft: #dcefeb;
+  --on-accent: #ffffff;
+
+  --success: #176b39;
+  --success-soft: #ddefe3;
+  --warning: #7a4e00;
+  --warning-soft: #f6e9c8;
+  --danger: #a62b22;
+  --danger-soft: #f6dedb;
+
+  --online: #176b39;
+  --idle: #7a4e00;
+  --dnd: #a62b22;
+  --offline: #6d6258;
+
+  --rail: #211a15;
+  --rail-hover: #352a22;
+  --rail-active: #b7410e;
+  --rail-text: #f7efe7;
+  --rail-muted: #d0c1b0;
+  --rail-muted-hover: #eadfd3;
+
+  --scrim: rgb(21 16 12 / 0.62);
+  --shadow-color: 28 20 14;
+  --focus: #0f6b6b;
+  --selection: #f4c6ad;
+  --scrollbar: #c7b8a7;
+  --scrollbar-hover: #ae9c88;
+  --skeleton: #eee4d9;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #14110f;
+  --surface: #1e1915;
+  --surface-2: #251f1a;
+  --surface-3: #302821;
+  --border: #40362f;
+  --border-strong: #5b4b40;
+
+  --text: #f7efe7;
+  --text-muted: #c3b5a7;
+  --text-faint: #a99b8d;
+
+  --primary: #f08a5b;
+  --primary-hover: #ffa77f;
+  --on-primary: #241009;
+  --primary-soft: #3a2117;
+
+  --accent: #6ad8c9;
+  --accent-strong: #8fe6db;
+  --accent-soft: #173530;
+  --on-accent: #10211e;
+
+  --success: #77dda2;
+  --success-soft: #163126;
+  --warning: #f2c46d;
+  --warning-soft: #362b16;
+  --danger: #ff9c92;
+  --danger-soft: #3b1e1a;
+
+  --online: #77dda2;
+  --idle: #f2c46d;
+  --dnd: #ff9c92;
+  --offline: #a99b8d;
+
+  --rail: #0d0a08;
+  --rail-hover: #241c17;
+  --rail-active: #b7410e;
+  --rail-text: #f7efe7;
+  --rail-muted: #c3b5a7;
+  --rail-muted-hover: #f1e6da;
+
+  --scrim: rgb(0 0 0 / 0.7);
+  --shadow-color: 0 0 0;
+  --focus: #6ad8c9;
+  --selection: #5b2a17;
+  --scrollbar: #57493e;
+  --scrollbar-hover: #715f51;
+  --skeleton: #2d251f;
+}

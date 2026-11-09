@@ -1,0 +1,31 @@
+[package]
+name = "read-shield"
+version = "0.1.0"
+edition = "2021"
+description = "Coalescing ScyllaDB history read proxy for Rustle"
+license = "MIT"
+
+[[bin]]
+name = "read-shield"
+path = "src/main.rs"
+
+[dependencies]
+async-trait = "0.1"
+chrono = "0.4"
+dashmap = "6"
+prost = "0.13"
+scylla = { version = "1.9", features = ["chrono-04"] }
+thiserror = "2"
+tokio = { version = "1.44", features = ["rt-multi-thread", "macros", "net", "signal", "time"] }
+tonic = "0.12"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+[build-dependencies]
+protoc-bin-vendored = "3"
+tonic-build = "0.12"
+
+[profile.release]
+lto = "thin"
+strip = true
+codegen-units = 1

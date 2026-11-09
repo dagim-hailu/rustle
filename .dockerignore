@@ -1,0 +1,12 @@
+**/node_modules
+**/dist
+**/.next
+**/_build
+**/deps
+**/target
+**/.git
+**/.env
+**/uploads
+**/.cargo
+*.log
+.scylla
